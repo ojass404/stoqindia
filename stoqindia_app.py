@@ -1,23 +1,30 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
 import plotly.graph_objects as go
 import plotly.express as px
-from datetime import timedelta
 
-# Load NSE universe (upload your CSV to GitHub)
 @st.cache_data
 def load_universe():
-    df = pd.read_csv("indian_stocks_all_nse.csv")
-    df["symbol"] = df["symbol"].str.strip().str.upper()
-    df["name"] = df["name"].str.strip()
-    return df
+    """Safe CSV loader"""
+    try:
+        df = pd.read_csv("indian_stocks_all_nse.csv")
+        df["symbol"] = df["symbol"].str.strip().str.upper()
+        df["name"] = df["name"].str.strip()
+        return df
+    except FileNotFoundError:
+        # Demo data if CSV missing
+        return pd.DataFrame({
+            'symbol': ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ITC'],
+            'name': ['Reliance Industries', 'TCS Ltd', 'HDFC Bank', 'Infosys', 'ITC Ltd'],
+            'sector': ['Energy', 'IT', 'Banking', 'IT', 'FMCG'],
+            'exchange': ['NS', 'NS', 'NS', 'NS', 'NS']
+        })
 
 STOCK_UNIVERSE = load_universe()
 
-def stoqindia_pro():
+def main():
     st.markdown("""
     <style>
     .main {background: linear-gradient(135deg, #f5f7fa 0%, #e3f2fd 100%);}
@@ -26,12 +33,11 @@ def stoqindia_pro():
     """, unsafe_allow_html=True)
     
     st.title("🚀 StoqIndia")
-    st.sidebar.success(f"✅ {len(STOCK_UNIVERSE):,} NSE Stocks")
+    st.sidebar.success(f"✅ {len(STOCK_UNIVERSE)} Stocks")
     
-    tab = st.sidebar.radio("Select:", 
-        ["📈 Market", "🔍 Stocks", "💼 Portfolio"])
+    tab = st.sidebar.radio("Select:", ["📈 Market", "🔍 Stocks", "💼 Portfolio"])
     
-    if "📈 Market" in tab:
+    if tab == "📈 Market":
         st.header("📊 NIFTY 50 Live")
         nifty_data = yf.download("^NSEI", period="6mo", progress=False)
         if not nifty_data.empty:
@@ -52,10 +58,10 @@ def stoqindia_pro():
             fig.update_layout(title="NIFTY 50 Live", height=500)
             st.plotly_chart(fig, use_container_width=True)
     
-    elif "🔍 Stocks" in tab:
+    elif tab == "🔍 Stocks":
         st.header("🔍 NSE Stocks")
-        search_symbols = STOCK_UNIVERSE['symbol'].head(20).tolist()
-        search = st.selectbox("Quick search:", [""] + search_symbols)
+        search_symbols = STOCK_UNIVERSE['symbol'].tolist()
+        search = st.selectbox("Quick search:", [""] + search_symbols[:20])
         
         if search:
             data = yf.download(f"{search}.NS", period="6mo", progress=False)
@@ -75,7 +81,7 @@ def stoqindia_pro():
                 col2.metric("Price", f"₹{current_price:.0f}")
                 col2.metric("6M Return", f"{price_change:.1f}%")
     
-    elif "💼 Portfolio" in tab:
+    elif tab == "💼 Portfolio":
         st.header("💼 Portfolio")
         safe_symbols = STOCK_UNIVERSE['symbol'].head(20).tolist()
         selected = st.multiselect("Pick stocks:", safe_symbols[:6], default=safe_symbols[:3])
@@ -91,4 +97,5 @@ def stoqindia_pro():
             fig = px.pie(demo_df, values='Weight', names='Symbol', hole=0.4)
             st.plotly_chart(fig)
 
-stoqindia_pro()
+if __name__ == "__main__":
+    main()
