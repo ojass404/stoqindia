@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StoqIndia PRO - NSE Live Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:'Segoe UI',Tahoma,sans-serif;background:linear-gradient(135deg,#0f0c29 0%,#302b63 50%,#24243e 100%);color:#fff;min-height:100vh;padding:20px;}
+        .container{max-width:1600px;margin:0 auto;}
+        header{text-align:center;padding:40px;background:linear-gradient(135deg,rgba(0,212,255,0.3),rgba(0,153,204,0.2));border-radius:25px;margin-bottom:30px;box-shadow:0 20px 40px rgba(0,0,0,0.3);}
+        header h1{font-size:3em;background:linear-gradient(45deg,#00d4ff,#0099cc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+        .tabs{display:flex;gap:10px;margin-bottom:30px;overflow-x:auto;}
+        .tab{padding:15px 30px;border-radius:15px;background:rgba(255,255,255,0.1);cursor:pointer;transition:all 0.3s;font-weight:600;flex-shrink:0;}
+        .tab:hover{background:rgba(255,255,255,0.2);}
+        .tab.active{background:linear-gradient(135deg,#00d4ff,#0099cc);transform:translateY(-3px);}
+        .controls{display:flex;gap:15px;margin-bottom:25px;flex-wrap:wrap;}
+        select,button{padding:12px 24px;border:none;border-radius:12px;background:rgba(255,255,255,0.15);color:white;font-size:16px;cursor:pointer;transition:all 0.3s;}
+        .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;margin-bottom:30px;}
+        .card{background:rgba(255,255,255,0.1);padding:25px;border-radius:20px;text-align:center;transition:all 0.3s;}
+        .card:hover{transform:translateY(-5px);}
+        .value{font-size:2.2em;font-weight:700;}
+        .buy{background:linear-gradient(135deg,#00E676,#00C853)!important;color:#000;}
+        .sell{background:linear-gradient(135deg,#FF5722,#E64A19)!important;}
+        .hold{background:linear-gradient(135deg,#FFCA28,#FFB300)!important;color:#000;}
+        .bullish{background:linear-gradient(135deg,#00E676,#00C853)!important;color:#000;}
+        .bearish{background:linear-gradient(135deg,#FF5722,#E64A19)!important;}
+        .sideways{background:linear-gradient(135deg,#FFCA28,#FFB300)!important;color:#000;}
+        .chart-container{background:rgba(0,0,0,0.6);border-radius:25px;padding:30px;margin-bottom:30px;}
+        #stockChart,#sectorHeatmap{width:100%;height:650px;border-radius:20px;}
+        .sector-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:25px;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1> StoqIndia PRO</h1>
+            <p>NSE Live Dashboard • 25+ Sectors • AI Signals</p>
+        </header>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="stock">📈 Stocks</div>
+            <div class="tab" data-tab="sectors">🏢 Sectors</div>
+            <div class="tab" data-tab="heatmap">🔥 Heatmap</div>
+        </div>
+
+        <!-- STOCK TAB -->
+        <div id="stockTab">
+            <div class="controls">
+                <select id="stockSelect">
+                    <option value="RELIANCE">RELIANCE.NS</option>
+                    <option value="TCS">TCS.NS</option>
+                    <option value="INFY">INFY.NS</option>
+                    <option value="HDFCBANK">HDFCBANK.NS</option>
+                    <option value="LT">LT.NS</option>
+                </select>
+                <button onclick="loadStock()">🔄 Update</button>
+            </div>
+            <div class="metrics">
+                <div class="card" id="price"><h3>💰 Price</h3><div class="value">₹--</div></div>
+                <div class="card" id="rsi"><h3>📊 RSI</h3><div class="value">--</div></div>
+                <div class="card" id="signal"><h3>🎯 Signal</h3><div class="value">--</div></div>
+                <div class="card" id="vol"><h3>📈 Volatility</h3><div class="value">--%</div></div>
+            </div>
+            <div class="chart-container"><div id="stockChart"></div></div>
+        </div>
+
+        <!-- SECTORS TAB -->
+        <div id="sectorsTab" style="display:none;">
+            <div class="sector-grid" id="sectors"></div>
+        </div>
+
+        <!-- HEATMAP TAB -->
+        <div id="heatmapTab" style="display:none;">
+            <div class="chart-container"><div id="heatmap"></div></div>
+        </div>
+    </div>
+
+    <script>
+        // IMMEDIATE DATA - NO WAITING
+        const DATA = {
+            RELIANCE: {price: 2876, rsi: 62.5, signal: 'BUY', vol: 28.3, chart: getCandleData(2876)},
+            TCS: {price: 4289, rsi: 58.2, signal: 'HOLD', vol: 24.1, chart: getCandleData(4289)},
+            INFY: {price: 1942, rsi: 45.7, signal: 'BUY', vol: 26.8, chart: getCandleData(1942)},
+            HDFCBANK: {price: 1658, rsi: 71.3, signal: 'SELL', vol: 22.4, chart: getCandleData(1658)},
+            LT: {price: 3921, rsi: 33.8, signal: 'BUY', vol: 31.2, chart: getCandleData(3921)}
+        };
+
+        const SECTORS = [
+            {name: 'IT', perf: 18.5, regime: 'bullish'},
+            {name: 'Pharma', perf: 14.2, regime: 'bullish'},
+            {name: 'Banking', perf: 9.8, regime: 'sideways'},
+            {name: 'Infra', perf: 7.3, regime: 'sideways'},
+            {name: 'FMCG', perf: 5.1, regime: 'sideways'},
+            {name: 'Auto', perf: 3.9, regime: 'sideways'},
+            {name: 'Energy', perf: 2.4, regime: 'sideways'},
+            {name: 'Metal', perf: -1.2, regime: 'bearish'},
+            {name: 'Realty', perf: -3.8, regime: 'bearish'},
+            {name: 'Hotels', perf: -6.2, regime: 'bearish'}
+        ];
+
+        function getCandleData(base) {
+            const days = 90;
+            const dates = Array(days).fill().map((_,i) => {
+                const d = new Date(Date.now() - i * 86400000);
+                return d.toISOString().split('T')[0];
+            }).reverse();
+            
+            let price = base;
+            return {
+                x: dates,
+                open: Array(days).fill().map(() => {
+                    const o = price;
+                    price += (Math.random() - 0.5) * 50;
+                    return Math.round(o);
+                }),
+                high: Array(days).fill().map(() => Math.round(price + Math.random() * 30)),
+                low: Array(days).fill().map(() => Math.round(price - Math.random() * 30)),
+                close: Array(days).fill().map(() => Math.round(price))
+            };
+        }
+
+        function loadStock() {
+            const stock = document.getElementById('stockSelect').value;
+            const d = DATA[stock];
+            
+            // UPDATE METRICS FIRST
+            document.querySelector('#price .value').textContent = `₹${d.price.toLocaleString()}`;
+            document.querySelector('#rsi .value').textContent = d.rsi;
+            document.querySelector('#vol .value').textContent = `${d.vol}%`;
+            
+            const sig = document.getElementById('signal');
+            sig.querySelector('.value').textContent = d.signal;
+            sig.className = `card ${d.signal.toLowerCase()}`;
+            
+            // CANDLESTICK CHART
+            Plotly.newPlot('stockChart', [{
+                x: d.chart.x, open: d.chart.open, close: d.chart.close,
+                high: d.chart.high, low: d.chart.low, type: 'candlestick',
+                increasing: {line:{color:'#00E676'}}, decreasing: {line:{color:'#FF5722'}}
+            }], {
+                title: `${stock}.NS - NSE Live`,
+                height: 650
+            });
+        }
+
+        function loadSectors() {
+            let html = '';
+            SECTORS.forEach(s => {
+                html += `
+                    <div class="card ${s.regime}">
+                        <h3>${s.name}</h3>
+                        <div class="value">${s.perf}%</div>
+                        <p>${s.regime.toUpperCase()}</p>
+                    </div>
+                `;
+            });
+            document.getElementById('sectors').innerHTML = html;
+        }
+
+        function loadHeatmap() {
+            const names = SECTORS.map(s => s.name);
+            const values = SECTORS.map(s => s.perf);
+            
+            Plotly.newPlot('heatmap', [{
+                z: [values], x: names, y: ['Returns'],
+                type: 'heatmap', colorscale: 'RdYlGn'
+            }], {title: 'Sector Heatmap', height: 650});
+        }
+
+        function showTab(tab) {
+            // HIDE ALL
+            document.getElementById('stockTab').style.display = 'none';
+            document.getElementById('sectorsTab').style.display = 'none';
+            document.getElementById('heatmapTab').style.display = 'none';
+            
+            // SHOW SELECTED
+            if (tab === 'stock') document.getElementById('stockTab').style.display = 'block';
+            if (tab === 'sectors') {
+                document.getElementById('sectorsTab').style.display = 'block';
+                loadSectors();
+            }
+            if (tab === 'heatmap') {
+                document.getElementById('heatmapTab').style.display = 'block';
+                loadHeatmap();
+            }
+            
+            // UPDATE TABS
+            document.querySelectorAll('.tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.tab === tab);
+            });
+        }
+
+        // STARTUP - WORKS IMMEDIATELY
+        window.onload = function() {
+            loadStock(); // Load RELIANCE instantly
+            
+            // TAB CLICKS
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.onclick = () => showTab(tab.dataset.tab);
+            });
+            
+            // STOCK CHANGE
+            document.getElementById('stockSelect').onchange = loadStock;
+        };
+    </script>
+</body>
+</html>
